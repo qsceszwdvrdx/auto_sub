@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>廣播閱讀器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f7f5f2;--card:#fffdfb;--fg:#26231f;--sub:#6f6a62;--faint:#a39d94;--line:#e8e3dc;
+  --accent:#b4532a;--hl:#f6e7dc;--star:#d99a00;--fs:20;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#171614;--card:#1f1d1a;--fg:#ebe7e0;--sub:#a8a298;--faint:#6e695f;--line:#2e2b27;
+  --accent:#e58a5c;--hl:#33271f;--star:#f2b73a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 "Yu Gothic UI","Hiragino Sans","Noto Sans JP","Microsoft JhengHei UI","PingFang TC",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:740px;margin:0 auto}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+/* 上方：只有「節目選單 + 設定」與播放器 */
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:18px 24px 20px;box-shadow:0 1px 12px rgba(0,0,0,.04)}
+.top{display:flex;gap:14px;align-items:center;margin-bottom:6px}
+#ep{flex:1;min-width:0;font-size:16px;letter-spacing:.01em;background:none;border:0;color:var(--fg);padding:6px 0;text-overflow:ellipsis;font-weight:600}
+#gear{font-size:14px;color:var(--sub);padding:7px 16px;border:1px solid var(--line);border-radius:999px}
+#gear[aria-expanded=true]{color:var(--accent);border-color:var(--accent)}
+audio{width:100%;height:42px;display:block;margin-top:10px}
+#pos{font-size:13px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+/* 設定面板（預設收合） */
+#panel{display:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--line);gap:16px;flex-direction:column;font-size:14px}
+#panel.open{display:flex}
+.prow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.prow>label.k{width:64px;color:var(--sub);font-size:13px}
+.seg3{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg3 button{padding:7px 16px;font-size:14px;color:var(--sub);border-right:1px solid var(--line)}
+.seg3 button:last-child{border-right:0}
+.seg3 button.on{background:var(--accent);color:#fff}
+a.chip{text-decoration:none}
+.chip{padding:7px 16px;font-size:14px;color:var(--sub);border:1px solid var(--line);border-radius:8px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+select#rate{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:13px}
+#search{flex:1;min-width:140px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:14px}
+.hint{font-size:12px;color:var(--faint)}
+
+/* 字幕 */
+main{padding:28px 24px 160px}
+.msg{padding:56px 0;text-align:center;color:var(--sub)}
+.seg{position:relative;padding:22px 40px 22px 16px;border-radius:14px;cursor:pointer;display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:12px;border-left:3px solid transparent}
+.seg+.seg{margin-top:6px}
+.seg:hover{background:color-mix(in srgb,var(--fg) 4%,transparent)}
+.seg.on{background:var(--hl);border-left-color:var(--accent)}
+.t{font-size:12.5px;color:var(--faint);font-variant-numeric:tabular-nums;padding-top:8px}
+.ja{font-family:"Zen Maru Gothic","M PLUS Rounded 1c","Kosugi Maru","Hiragino Maru Gothic ProN","Yu Gothic UI","Noto Sans JP",sans-serif;font-size:calc(var(--fs)*1px);line-height:1.65;font-weight:500;letter-spacing:.02em}
+.ro{font-size:calc(var(--fs)*.7px);color:var(--faint);margin-top:6px;line-height:1.55}
+.zh{font-size:calc(var(--fs)*.86px);color:var(--sub);margin-top:12px;line-height:1.75}
+.seg.on .zh{color:var(--fg)}
+.star{position:absolute;right:8px;top:10px;font-size:18px;line-height:1;padding:4px;color:var(--faint);opacity:0}
+.seg:hover .star,.star.on{opacity:1}
+.star.on{color:var(--star)}
+@media (hover:none){.star{opacity:.5}.star.on{opacity:1}}
+.ja,.ro,.zh{overflow-wrap:anywhere}
+.hide-ja .ja,.hide-ro .ro,.hide-zh .zh{display:none}
+.hidden{display:none!important}
+mark{background:color-mix(in srgb,var(--star) 35%,transparent);color:inherit;border-radius:3px}
+#lock{position:fixed;inset:0;z-index:50;background:var(--bg);align-items:center;justify-content:center;padding:24px}
+.lockcard{width:100%;max-width:360px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:32px 28px;display:flex;flex-direction:column;gap:14px}
+.lockcard h2{margin:0;font-size:20px}.lockcard p{margin:0;color:var(--sub);font-size:14px}
+.lockcard input[type=password]{font-size:16px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg)}
+.lockcard .rem{font-size:13.5px;color:var(--sub);display:flex;gap:8px;align-items:center}
+.lockcard button{padding:12px;border-radius:10px;background:var(--accent);color:#fff;font-size:16px}
+.lockcard button:disabled{opacity:.6}
+#lockerr{color:#c0392b;font-size:13.5px;min-height:1.2em}
+kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px}
+@media (max-width:520px){header{padding:14px 16px 16px}main{padding:20px 14px 140px}.seg{grid-template-columns:38px minmax(0,1fr);padding:18px 36px 18px 10px}.nohint{display:none}}
+</style></head><body>
+<header><div class="wrap">
+  <div class="top">
+    <select id="ep" aria-label="選擇節目"></select>
+    <span id="pos"></span>
+    <button id="gear" aria-expanded="false" aria-controls="panel">設定</button>
+  </div>
+  <audio id="au" controls preload="metadata"></audio>
+  <div id="astat" class="hint" style="display:none;margin-top:10px;font-size:13px"></div>
+  <div id="panel">
+    <div class="prow"><label class="k">顯示</label>
+      <span class="seg3"><button id="sja" class="on">日文</button><button id="sro" class="on">拼音</button><button id="szh" class="on">中文</button></span>
+    </div>
+    <div class="prow"><label class="k">播放</label>
+      <select id="rate" aria-label="播放速度"><option value="0.7">0.7×</option><option value="0.85">0.85×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select>
+      <button id="loop" class="chip">單句循環</button>
+      <button id="follow" class="chip on">自動捲動</button>
+    </div>
+    <div class="prow"><label class="k">閱讀</label>
+      <span class="seg3"><button id="fsm" aria-label="縮小字體">A−</button><button id="fsp" aria-label="放大字體">A＋</button></span>
+      <button id="onlyStar" class="chip">只看收藏 ★</button>
+      <input type="search" id="search" placeholder="搜尋…" aria-label="搜尋">
+    </div>
+    <div class="prow" id="navrow"><label class="k">前往</label>
+      <a class="chip" href="/library">處理紀錄</a><a class="chip" href="/">處理新節目</a>
+    </div>
+    <div class="hint nohint"><kbd>空白</kbd> 播放/暫停 　<kbd>←</kbd> <kbd>→</kbd> 上/下一句 　<kbd>L</kbd> 單句循環 　點任一句即跳到該處</div>
+  </div>
+</div></header>
+<div id="lock" style="display:none"><div class="lockcard">
+  <h2>🔒 請輸入密語</h2>
+  <p>內容已加密，輸入密語後會在這台裝置上解鎖。</p>
+  <input type="password" id="pw" placeholder="密語" autocomplete="current-password" aria-label="密語">
+  <label class="rem"><input type="checkbox" id="remember" checked> 記住這台裝置</label>
+  <button id="lockbtn">解鎖</button>
+  <div id="lockerr"></div>
+</div></div>
+<main><div class="wrap" id="list"><div class="msg">載入中…</div></div></main>
+<script>
+const STATIC=true/*STATIC_MODE*/;  // export_static.py 會把這裡改成 true
+const ENC=true/*ENC_MODE*/;        // 加密匯出（--encrypt）時改成 true
+
+/* ---------- 加密模式：PBKDF2 + AES-GCM，在瀏覽器本地解密 ---------- */
+let cryptoKey=null,encMeta=null,audioSeq=0,blobUrl=null;
+async function deriveKey(pass){
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
+  const salt=Uint8Array.from(atob(encMeta.salt),c=>c.charCodeAt(0));
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:encMeta.iterations,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
+}
+async function decryptBuf(buf){
+  return crypto.subtle.decrypt({name:"AES-GCM",iv:buf.slice(0,12)},cryptoKey,buf.slice(12));
+}
+async function fetchBuf(url,onProgress){
+  const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);
+  const total=+r.headers.get("content-length")||0;
+  if(!onProgress||!r.body||!total)return r.arrayBuffer();
+  const rd=r.body.getReader(),parts=[];let got=0;
+  for(;;){const {done,value}=await rd.read();if(done)break;parts.push(value);got+=value.length;onProgress(got/total)}
+  const out=new Uint8Array(got);let o=0;for(const p of parts){out.set(p,o);o+=p.length}
+  return out.buffer;
+}
+async function tryUnlock(pass){
+  cryptoKey=await deriveKey(pass);
+  try{return JSON.parse(new TextDecoder().decode(await decryptBuf(await fetchBuf("data/index.enc"))))}
+  catch(e){cryptoKey=null;throw new Error("bad")}
+}
+async function unlock(){
+  encMeta=await (await fetch("data/meta.json")).json();
+  const saved=store("pass");
+  if(saved){try{return await tryUnlock(saved)}catch(e){store("pass","")}}
+  const lock=$("lock");lock.style.display="flex";$("pw").focus();
+  return new Promise(res=>{
+    const go=async()=>{
+      $("lockerr").textContent="";$("lockbtn").disabled=true;$("lockbtn").textContent="解鎖中…";
+      try{const idx=await tryUnlock($("pw").value);if($("remember").checked)store("pass",$("pw").value);lock.style.display="none";res(idx)}
+      catch(e){$("lockerr").textContent="密語不正確，請再試一次";$("lockbtn").disabled=false;$("lockbtn").textContent="解鎖"}
+    };
+    $("lockbtn").onclick=go;$("pw").onkeydown=e=>{if(e.key==="Enter")go()};
+  });
+}
+function setAudio(name,d){
+  const au=$("au");
+  if(!ENC){au.src=STATIC?`data/${encodeURIComponent(name)}/${d.audio_file}`:"/audio/"+encodeURIComponent(name);return}
+  const seq=++audioSeq,st=$("astat");
+  au.pause();au.removeAttribute("src");au.style.display="none";st.style.display="block";st.textContent="下載音訊中…";
+  fetchBuf(`data/${encodeURIComponent(name)}/audio.enc`,p=>{if(seq===audioSeq)st.textContent=`下載音訊中… ${Math.round(p*100)}%`})
+    .then(async buf=>{if(seq!==audioSeq)return;st.textContent="解密中…";const plain=await decryptBuf(buf);if(seq!==audioSeq)return;
+      if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=URL.createObjectURL(new Blob([plain],{type:d.audio_mime||"audio/mp4"}));
+      au.src=blobUrl;au.style.display="block";st.style.display="none"})
+    .catch(e=>{if(seq===audioSeq)st.textContent="音訊載入失敗："+e.message});
+}
+const $=id=>document.getElementById(id);
+const store=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}};
+let segs=[],starts=[],cur=-1,epName="",stars=new Set(),userScrollUntil=0,lastSave=0;
+const flag={ja:true,ro:true,zh:true,follow:true,loop:false,onlyStar:false};
+
+const fmt=t=>{t=Math.floor(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;
+  return (h?h+":"+String(m).padStart(2,"0"):String(m).padStart(2,"0"))+":"+String(s).padStart(2,"0")};
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const escRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+
+async function init(){
+  for(const k of ["ja","ro","zh","follow"]){const v=store("f_"+k);if(v!==null)flag[k]=v==="1"}
+  const fs=+store("fs");if(fs)document.documentElement.style.setProperty("--fs",fs);
+  $("rate").value=store("rate")||"1";
+  syncButtons();
+  let eps=[];
+  if(STATIC){const n=$("navrow");if(n)n.remove()}
+  try{eps=ENC?await unlock():await (await fetch(STATIC?"data/index.json":"/api/episodes")).json()}catch(e){}
+  if(!eps.length){$("list").innerHTML='<div class="msg">還沒有處理完成的節目。<br>請先用網頁介面（/）或 transcribe.py 處理一集。</div>';return}
+  $("ep").innerHTML=eps.map(e=>`<option value="${esc(e.name)}">${e.has_audio?"":"（無音訊）"}${esc(e.title||e.name)}</option>`).join("");
+  const last=new URLSearchParams(location.search).get("ep")||store("ep");if(last&&eps.some(e=>e.name===last))$("ep").value=last;
+  $("ep").onchange=()=>load($("ep").value);
+  load($("ep").value);
+}
+async function load(name){
+  epName=name;store("ep",name);cur=-1;
+  $("list").innerHTML='<div class="msg">載入中…</div>';
+  let d;
+  try{
+    const r=await fetch(ENC?`data/${encodeURIComponent(name)}/transcript.enc`:STATIC?`data/${encodeURIComponent(name)}/transcript.json`:"/api/episode/"+encodeURIComponent(name));
+    if(!r.ok){let m=r.status;try{m=(await r.json()).detail||m}catch(_){}throw new Error(m)}
+    d=ENC?JSON.parse(new TextDecoder().decode(await decryptBuf(await r.arrayBuffer()))):await r.json();
+  }catch(e){$("list").innerHTML='<div class="msg">讀取失敗：'+esc(e.message)+'</div>';return}
+  segs=d.segments;starts=segs.map(s=>s.start);
+  try{stars=new Set(JSON.parse(store("bm:"+name)||"[]"))}catch(e){stars=new Set()}
+  const au=$("au");
+  $("astat").style.display="none";audioSeq++;
+  if(d.has_audio){au.style.display="block";setAudio(name,d);
+    const pos=+store("pos:"+name)||0;
+    au.addEventListener("loadedmetadata",()=>{au.playbackRate=+$("rate").value;if(pos>2&&pos<au.duration-5){au.currentTime=pos}},{once:true});
+  }else{au.removeAttribute("src");au.style.display="none"}
+  const note=d.has_audio?"":'<div class="msg">這一集沒有保留音訊檔，只能閱讀文字。<br>重新執行 <code>python transcribe.py 網址</code> 會自動補下載音訊。</div>';
+  $("list").innerHTML=note+segs.map((s,i)=>
+    `<div class="seg" data-i="${i}"><div class="t">${fmt(s.start)}</div><div><div class="ja" lang="ja">${esc(s.ja)}</div><div class="ro">${esc(s.romaji)}</div><div class="zh" lang="zh-Hant">${esc(s.zh)}</div></div>`+
+    `<button class="star${stars.has(i)?" on":""}" data-star="${i}" title="收藏" aria-label="收藏">${stars.has(i)?"★":"☆"}</button></div>`).join("");
+  applyFilter();updatePos();
+}
+
+function idxAt(t){let lo=0,hi=starts.length-1,r=-1;while(lo<=hi){const m=(lo+hi)>>1;if(starts[m]<=t){r=m;lo=m+1}else hi=m-1}return r}
+function segEnd(i){return i+1<segs.length?Math.min(segs[i+1].start,segs[i].end+3):segs[i].end}
+function seek(i,play){
+  const au=$("au");if(!au.src||i<0||i>=segs.length)return;
+  au.currentTime=segs[i].start+0.01;if(play&&au.paused)au.play();
+  setCur(i,true,true);
+}
+function setCur(i,scroll,force){
+  if(i===cur)return;
+  const old=document.querySelector(".seg.on");if(old)old.classList.remove("on");
+  cur=i;const el=document.querySelector(`.seg[data-i="${i}"]`);
+  if(el){el.classList.add("on");
+    if(scroll&&flag.follow&&!$("search").value&&(force||Date.now()>userScrollUntil)){
+      const hh=document.querySelector("header").offsetHeight;
+      window.scrollTo({top:el.getBoundingClientRect().top+scrollY-hh-40,behavior:"smooth"})}}
+  updatePos();
+}
+function updatePos(){$("pos").textContent=segs.length?`${cur<0?0:cur+1}/${segs.length}`:""}
+$("au").addEventListener("timeupdate",()=>{
+  const au=$("au"),t=au.currentTime;
+  if(flag.loop&&cur>=0){
+    if(t>=segEnd(cur)-0.05||t<segs[cur].start-0.4){au.currentTime=segs[cur].start+0.01;return}
+  }
+  const i=idxAt(t);if(i>=0)setCur(i,true,false);
+  const now=Date.now();if(epName&&now-lastSave>2000){lastSave=now;store("pos:"+epName,Math.floor(t))}
+});
+["wheel","touchmove"].forEach(ev=>window.addEventListener(ev,()=>{userScrollUntil=Date.now()+5000},{passive:true}));
+
+$("list").addEventListener("click",e=>{
+  const st=e.target.closest("[data-star]");
+  if(st){e.stopPropagation();const i=+st.dataset.star;
+    stars.has(i)?stars.delete(i):stars.add(i);
+    store("bm:"+epName,JSON.stringify([...stars]));
+    st.classList.toggle("on",stars.has(i));st.textContent=stars.has(i)?"★":"☆";
+    if(flag.onlyStar)applyFilter();return}
+  if(String(getSelection()))return;
+  const el=e.target.closest(".seg");if(el)seek(+el.dataset.i,true);
+});
+
+function syncButtons(){
+  const c=$("list").classList;
+  c.toggle("hide-ja",!flag.ja);c.toggle("hide-ro",!flag.ro);c.toggle("hide-zh",!flag.zh);
+  $("sja").classList.toggle("on",flag.ja);$("sro").classList.toggle("on",flag.ro);$("szh").classList.toggle("on",flag.zh);
+  $("follow").classList.toggle("on",flag.follow);$("loop").classList.toggle("on",flag.loop);$("onlyStar").classList.toggle("on",flag.onlyStar);
+}
+for(const k of ["ja","ro","zh"])$("s"+k).onclick=()=>{flag[k]=!flag[k];store("f_"+k,flag[k]?"1":"0");syncButtons()};
+$("follow").onclick=()=>{flag.follow=!flag.follow;store("f_follow",flag.follow?"1":"0");syncButtons()};
+$("loop").onclick=()=>{flag.loop=!flag.loop;syncButtons()};
+$("onlyStar").onclick=()=>{flag.onlyStar=!flag.onlyStar;syncButtons();applyFilter()};
+let tm;$("search").addEventListener("input",()=>{clearTimeout(tm);tm=setTimeout(applyFilter,150)});
+function applyFilter(){
+  const q=$("search").value.trim().toLowerCase();
+  const re=q?new RegExp(escRe(esc(q)),"gi"):null;
+  let n=0;
+  document.querySelectorAll(".seg").forEach(el=>{
+    const i=+el.dataset.i,s=segs[i];
+    const hit=!q||(s.ja+" "+s.romaji+" "+s.zh).toLowerCase().includes(q);
+    const ok=hit&&(!flag.onlyStar||stars.has(i));
+    el.classList.toggle("hidden",!ok);if(ok)n++;
+    for(const [cls,key] of [["ja","ja"],["ro","romaji"],["zh","zh"]]){
+      el.querySelector("."+cls).innerHTML=re?esc(s[key]).replace(re,m=>"<mark>"+m+"</mark>"):esc(s[key]);
+    }
+  });
+  const old=document.getElementById("empty");if(old)old.remove();
+  if(!n&&segs.length)$("list").insertAdjacentHTML("beforeend",'<div class="msg" id="empty">'+(flag.onlyStar&&!q?"還沒有收藏的句子。點句子右側的 ☆ 可收藏。":"沒有符合的句子")+'</div>');
+}
+
+$("rate").onchange=()=>{$("au").playbackRate=+$("rate").value;store("rate",$("rate").value)};
+const prev=()=>seek(Math.max(0,(cur<0?0:cur)-1),true), next=()=>seek(Math.min(segs.length-1,cur+1),true);
+$("gear").onclick=()=>{const o=$("panel").classList.toggle("open");$("gear").setAttribute("aria-expanded",o)};
+function setFs(d){const v=Math.min(30,Math.max(14,(+getComputedStyle(document.documentElement).getPropertyValue("--fs")||20)+d));
+  document.documentElement.style.setProperty("--fs",v);store("fs",v)}
+$("fsm").onclick=()=>setFs(-1);$("fsp").onclick=()=>setFs(1);
+document.addEventListener("keydown",e=>{
+  if((e.target.matches&&e.target.matches("input,select,textarea"))||e.ctrlKey||e.metaKey||e.altKey)return;
+  const au=$("au");
+  if(e.code==="Space"){e.preventDefault();au.paused?au.play():au.pause()}
+  else if(e.key==="ArrowLeft"){e.preventDefault();prev()}
+  else if(e.key==="ArrowRight"){e.preventDefault();next()}
+  else if(e.key==="l"||e.key==="L"){$("loop").click()}
+});
+init();
+</script></body></html>
